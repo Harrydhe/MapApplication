@@ -3,53 +3,95 @@ import QtQuick.Controls 2.15
 import QtLocation 5.15
 import QtPositioning 5.15
 import QtQuick.Layouts 1.15
+import QtQml.XmlListModel 6.6  // Sesuaikan versi sesuai dengan instalasi Qt Anda
 
 ApplicationWindow {
     visible: true
     width: 800
     height: 600
+    title: "Map Application"
 
-    // Menggunakan ColumnLayout untuk mengatur tata letak utama
+    // Properti untuk menyimpan respons dari geocoding
+    property var geocodeResponse
+
+    // Fungsi untuk melakukan geocoding alamat
+    function geocodeAddress(address) {
+        var url = "https://nominatim.openstreetmap.org/search?q=" + encodeURIComponent(address) + "&format=json&addressdetails=1";
+        console.log("Geocode URL: " + url);
+        var request = new XMLHttpRequest();
+        request.open("GET", url, true);
+        request.onreadystatechange = function() {
+            if (request.readyState === XMLHttpRequest.DONE) {
+                if (request.status === 200) {
+                    geocodeResponse = JSON.parse(request.responseText);
+                    console.log("Geocode Response: " + request.responseText);
+                    if (geocodeResponse.length > 0) {
+                        var latitude = parseFloat(geocodeResponse[0].lat);
+                        var longitude = parseFloat(geocodeResponse[0].lon);
+                        var altitude = geocodeResponse[0].altitude ? parseFloat(geocodeResponse[0].altitude) : 0;
+                        console.log("Geocoded Latitude: " + latitude + ", Longitude: " + longitude + ", Altitude: " + altitude);
+                        map.center = QtPositioning.coordinate(latitude, longitude, altitude);
+                        map.zoomLevel = 14;
+                        altitudePanSlider.value = altitude;
+                    } else {
+                        console.log("Location not found");
+                        searchResultLabel.text = "Location not found";
+                    }
+                } else {
+                    console.log("Geocoding request failed: " + request.status);
+                    searchResultLabel.text = "Geocoding request failed";
+                }
+            }
+        }
+        request.send();
+    }
+
     ColumnLayout {
         anchors.fill: parent
+        spacing: 10
 
-        // Layout untuk TextField dan Button pencarian lokasi
         Column {
             spacing: 10
             Layout.alignment: Qt.AlignTop
             Layout.fillWidth: true
 
+            // TextField untuk memasukkan alamat pencarian
             TextField {
                 id: searchField
-                placeholderText: "Enter location"
+                placeholderText: "Penelusuran Lokasi"
                 width: parent.width / 2
                 anchors.horizontalCenter: parent.horizontalCenter
                 onAccepted: {
-                    // Implementasikan logika pencarian lokasi
-                    // Gunakan API geocoding untuk mendapatkan koordinat dari alamat
+                    geocodeAddress(searchField.text)
                 }
             }
 
+            // Tombol untuk melakukan pencarian geocode
             Button {
                 text: "Search"
                 anchors.horizontalCenter: parent.horizontalCenter
                 onClicked: {
-                    // Implementasikan logika pencarian lokasi
-                    // Gunakan API geocoding untuk mendapatkan koordinat dari alamat
+                    geocodeAddress(searchField.text)
                 }
+            }
+
+            // Label untuk menampilkan hasil pencarian
+            Label {
+                id: searchResultLabel
+                text: ""
+                anchors.horizontalCenter: parent.horizontalCenter
             }
         }
 
-        // Layout untuk slider zoom dan panning
         RowLayout {
             Layout.fillWidth: true
             Layout.alignment: Qt.AlignHCenter
-            spacing: 40  // Jarak antara slider dan label
+            spacing: 40
 
-            // Slider vertikal untuk zoom in dan zoom out
             ColumnLayout {
                 Layout.alignment: Qt.AlignVCenter
 
+                // Slider untuk mengatur zoom level peta
                 Slider {
                     id: zoomSlider
                     from: 1
@@ -57,99 +99,117 @@ ApplicationWindow {
                     stepSize: 1
                     orientation: Qt.Horizontal
                     value: map.zoomLevel
-                    height: parent.height / 4  // Tinggi slider menjadi seperempat dari tinggi aplikasi
-                    width: 40  // Lebar slider lebih kecil
+                    height: 40
+                    width: 200
                     onValueChanged: {
                         map.zoomLevel = value
                     }
                 }
 
-                // Label untuk menampilkan level zoom
                 Label {
                     text: "Zoom Level: " + zoomSlider.value
-                    rotation: 0
                 }
             }
 
-            // Slider horizontal untuk panning longitude
             ColumnLayout {
                 Layout.alignment: Qt.AlignVCenter
 
+                // Slider untuk mengatur longitude peta
                 Slider {
                     id: horizontalPanSlider
-                    from: 95  // Minimum nilai untuk longitude Indonesia
-                    to: 141    // Maksimum nilai untuk longitude Indonesia
-                    value: map.center.longitude  // Nilai awal adalah longitude pusat peta
+                    from: 95
+                    to: 141
+                    value: map.center.longitude
                     orientation: Qt.Horizontal
-                    width: parent.width / 2  // Set lebar slider menjadi setengah dari lebar aplikasi
-                    height: 40  // Tinggi slider lebih kecil
+                    width: 200
+                    height: 40
                     onValueChanged: {
-                        map.center = QtPositioning.coordinate(map.center.latitude, value)
+                        map.center = QtPositioning.coordinate(map.center.latitude, value, map.center.altitude)
                     }
                 }
 
-                // Label untuk menampilkan nilai panning horizontal
                 Label {
                     text: "Longitude: " + horizontalPanSlider.value
-                    rotation: 0
                 }
             }
 
-            // Slider vertikal untuk panning latitude
             ColumnLayout {
                 Layout.alignment: Qt.AlignVCenter
 
+                // Slider untuk mengatur latitude peta
                 Slider {
                     id: verticalPanSlider
-                    from: -10  // Minimum nilai untuk latitude Indonesia
-                    to: 6    // Maksimum nilai untuk latitude Indonesia
-                    value: map.center.latitude  // Nilai awal adalah latitude pusat peta
+                    from: -10
+                    to: 6
+                    value: map.center.latitude
                     orientation: Qt.Horizontal
-                    height: parent.height / 5  // Set tinggi slider menjadi seperempat dari tinggi aplikasi
-                    width: 40  // Lebar slider lebih kecil
+                    height: 40
+                    width: 200
                     onValueChanged: {
-                        map.center = QtPositioning.coordinate(value, map.center.longitude)
+                        map.center = QtPositioning.coordinate(value, map.center.longitude, map.center.altitude)
                     }
                 }
 
-                // Label untuk menampilkan nilai panning vertikal
                 Label {
                     text: "Latitude: " + verticalPanSlider.value
-                    rotation: 0
                 }
             }
 
-            // Label untuk menampilkan nilai aktual dari latitude dan longitude
+            ColumnLayout {
+                Layout.alignment: Qt.AlignVCenter
+
+                // Slider untuk mengatur Altitude peta
+                Slider {
+                    id: altitudePanSlider
+                    from: 0
+                    to: 10000
+                    value: 0
+                    orientation: Qt.Horizontal
+                    height: 40
+                    width: 200
+                    onValueChanged: {
+                        map.center = QtPositioning.coordinate(map.center.latitude, map.center.longitude, altitudePanSlider.value)
+                    }
+                }
+
+                Label {
+                    text: "Altitude: " + altitudePanSlider.value
+                }
+            }
+
             ColumnLayout {
                 Layout.alignment: Qt.AlignVCenter
 
                 Label {
-                    text: "Latitude: " + verticalPanSlider.value.toFixed(6)  // Menampilkan hingga 6 angka di belakang koma
-                    rotation: 0
+                    text: "Latitude: " + verticalPanSlider.value.toFixed(6)
                 }
 
                 Label {
-                    text: "Longitude: " + horizontalPanSlider.value.toFixed(6)  // Menampilkan hingga 6 angka di belakang koma
-                    rotation: 0
+                    text: "Longitude: " + horizontalPanSlider.value.toFixed(6)
+                }
+
+                Label {
+                    text: "Altitude: " + altitudePanSlider.value.toFixed(6)
                 }
             }
         }
 
-        // Widget untuk tampilan peta
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
 
+            // Komponen Map untuk menampilkan peta
             Map {
                 id: map
                 anchors.fill: parent
                 plugin: Plugin {
-                    name: "osm"  // Menggunakan OpenStreetMap
+                    name: "osm"
                 }
-                center: QtPositioning.coordinate(-6.737246, 108.550659)  // Koordinat awal peta
+                center: QtPositioning.coordinate(-6.737246, 108.550659)
                 zoomLevel: 14
                 property var startCentroid
 
+                // Handler untuk pinch zoom pada peta
                 PinchHandler {
                     id: pinch
                     target: null
@@ -167,6 +227,7 @@ ApplicationWindow {
                     grabPermissions: PointerHandler.TakeOverForbidden
                 }
 
+                // Handler untuk pengaturan zoom menggunakan roda mouse
                 WheelHandler {
                     id: wheel
                     acceptedDevices: Qt.platform.pluginName === "cocoa" || Qt.platform.pluginName === "wayland"
@@ -176,27 +237,30 @@ ApplicationWindow {
                     property: "zoomLevel"
                 }
 
+                // Handler untuk menggeser peta dengan drag
                 DragHandler {
                     id: drag
                     target: null
                     onTranslationChanged: (delta) => map.pan(-delta.x, -delta.y)
                 }
 
+                // MouseArea untuk menangani double click pada peta
                 MouseArea {
                     anchors.fill: parent
                     onDoubleClicked: {
-                        // Ubah pusat peta menjadi lokasi klik dan perbesar (zoom in)
                         map.center = map.toCoordinate(Qt.point(mouse.x, mouse.y));
                         map.zoomLevel += 1;
                     }
                 }
 
+                // Shortcut untuk zoom in menggunakan keyboard
                 Shortcut {
                     enabled: map.zoomLevel < map.maximumZoomLevel
                     sequence: StandardKey.ZoomIn
                     onActivated: map.zoomLevel = Math.round(map.zoomLevel + 1)
                 }
 
+                // Shortcut untuk zoom out menggunakan keyboard
                 Shortcut {
                     enabled: map.zoomLevel > map.minimumZoomLevel
                     sequence: StandardKey.ZoomOut
@@ -204,6 +268,7 @@ ApplicationWindow {
                 }
             }
 
+            // Komponen PositionSource untuk mendapatkan posisi pengguna
             PositionSource {
                 id: positionSource
                 active: true
@@ -212,6 +277,5 @@ ApplicationWindow {
                 }
             }
         }
-
     }
 }
